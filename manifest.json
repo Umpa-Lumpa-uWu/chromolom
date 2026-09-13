@@ -1,23 +1,36 @@
 {
   "manifest_version": 3,
   "name": "Flow Local Test Runner",
-  "version": "3.1.0",
-  "description": "Persistent adaptive local toggle for the tested Google Flow frontend response override.",
+  "version": "4.0.0",
+  "description": "Persistent adaptive local toggle for the tested Google Flow frontend response override with enhanced security and monitoring.",
   "minimum_chrome_version": "100",
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
   "permissions": [
     "debugger",
     "storage",
     "tabs",
     "webNavigation"
   ],
+  "optional_permissions": [
+    "declarativeNetRequest"
+  ],
   "host_permissions": [
     "https://flow.google.com/*"
   ],
   "background": {
-    "service_worker": "background.js"
+    "service_worker": "background.js",
+    "type": "module"
   },
   "action": {
-    "default_title": "Flow local test: ON"
+    "default_title": "Flow local test: ON",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png"
+    }
   },
   "options_ui": {
     "page": "status.html",
@@ -36,5 +49,9 @@
       },
       "description": "Open Flow status page"
     }
+  },
+  "homepage_url": "https://github.com/your-org/flow-local-test-runner",
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'"
   }
 }
