@@ -616,7 +616,7 @@ chrome.action.onClicked.addListener((tab) => {
 });
 
 chrome.commands.onCommand.addListener((command) => {
-  if (command === "_execute_action") {
+  if (command === "toggle-extension") {
     // Toggle command triggered by Alt+Shift+F
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
       const clickedTab = tabs[0];
