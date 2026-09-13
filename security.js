@@ -43,7 +43,7 @@ export function validateUrl(url) {
  * @returns {{valid: boolean, reason?: string}} Validation result
  */
 export function validateBundleSize(byteLength) {
-  if (typeof byteLength !== 'number' || byteLength < 0) {
+  if (typeof byteLength !== 'number' || byteLength < 0 || !Number.isFinite(byteLength)) {
     return { valid: false, reason: 'Invalid byte length' };
   }
 
