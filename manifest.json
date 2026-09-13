@@ -1,0 +1,40 @@
+{
+  "manifest_version": 3,
+  "name": "Flow Local Test Runner",
+  "version": "3.1.0",
+  "description": "Persistent adaptive local toggle for the tested Google Flow frontend response override.",
+  "minimum_chrome_version": "100",
+  "permissions": [
+    "debugger",
+    "storage",
+    "tabs",
+    "webNavigation"
+  ],
+  "host_permissions": [
+    "https://flow.google.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_title": "Flow local test: ON"
+  },
+  "options_ui": {
+    "page": "status.html",
+    "open_in_tab": true
+  },
+  "commands": {
+    "_execute_action": {
+      "suggested_key": {
+        "default": "Alt+Shift+F"
+      },
+      "description": "Toggle Flow local test"
+    },
+    "open_status": {
+      "suggested_key": {
+        "default": "Alt+Shift+S"
+      },
+      "description": "Open Flow status page"
+    }
+  }
+}

@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <title>Flow Local Test Runner — status</title>
+  <link rel="stylesheet" href="status.css">
+</head>
+<body>
+  <main>
+    <h1>Flow Local Test Runner</h1>
+    <p class="subtitle">Version 3.1.0</p>
+
+    <section>
+      <h2>Mode</h2>
+      <div id="mode-value" class="mode">…</div>
+      <label class="toggle">
+        <input type="checkbox" id="enabled-toggle">
+        <span>Automatic mode enabled</span>
+      </label>
+    </section>
+
+    <section>
+      <h2>Last run</h2>
+      <dl>
+        <dt>Time</dt>
+        <dd id="last-run">—</dd>
+        <dt>Status</dt>
+        <dd id="last-status">—</dd>
+        <dt>Patched URL</dt>
+        <dd id="last-url" class="url">—</dd>
+        <dt>Strategy</dt>
+        <dd id="last-strategy">—</dd>
+        <dt>Error</dt>
+        <dd id="last-error">—</dd>
+      </dl>
+    </section>
+
+    <section>
+      <h2>Forced callee</h2>
+      <p class="hint">
+        Use this if auto-detection finds several candidates and picks the wrong one.
+        Enter the exact callee name from diagnostics, for example <code>Xy.ab</code>.
+      </p>
+      <div class="row">
+        <input type="text" id="forced-callee" placeholder="e.g. Xy.ab">
+        <button id="save-forced">Save</button>
+        <button id="clear-forced">Clear</button>
+      </div>
+    </section>
+
+    <section>
+      <h2>Diagnostics</h2>
+      <p class="hint">
+        Saved automatically when a patch fails. Cleared on success.
+      </p>
+      <div class="row">
+        <button id="copy-diagnostics">Copy diagnostics</button>
+        <button id="clear-diagnostics">Clear diagnostics</button>
+        <button id="refresh">Refresh</button>
+      </div>
+      <pre id="diagnostics-output">No diagnostics saved.</pre>
+    </section>
+  </main>
+  <script src="status.js"></script>
+</body>
+</html>
