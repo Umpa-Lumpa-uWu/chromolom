@@ -1,1 +1,24 @@
-Nothing needs to be added to .gitignore since the changes only include source code files (.js) and configuration files (.json) without any build artifacts, dependencies, or temporary files.
+# Dependencies
+node_modules/
+
+# Build / packaging artifacts for the Chrome Web Store
+*.zip
+*.crx
+*.pem
+dist/
+build/
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS / editor noise
+.DS_Store
+Thumbs.db
+*.swp
+.idea/
+.vscode/
+
+# Local environment
+.env
+.env.local

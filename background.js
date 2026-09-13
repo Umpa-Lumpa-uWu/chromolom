@@ -1,55 +1,34 @@
-// ES Module imports
-import { FlowPatch } from "./patch.js";
+// Flow Local Test Runner - Background Service Worker
+// Version 4.0.0
 
-const FLOW_HOME = "https://flow.google.com/";
-const FLOW_HOST = "flow.google.com";
-const FLOW_URL_PATTERN = /^https:\/\/flow\.google\.com\//;
-
-const TARGET_HOST = "www.gstatic.com";
-const TARGET_BUNDLE_MARKER = "AiSandboxAngularFrontend";
-const TARGET_BUNDLE_SUFFIX = "/m=_b";
-
-const CDP_VERSION = "1.3";
-const INTERCEPT_TIMEOUT_MS = 30000;
-const SUCCESS_BADGE_MS = 2500;
-const UNSUPPORTED_REDIRECT_COOLDOWN_MS = 15000;
+import {
+  FLOW_HOME,
+  FLOW_HOST,
+  FLOW_URL_PATTERN,
+  TARGET_HOST,
+  TARGET_BUNDLE_MARKER,
+  TARGET_BUNDLE_SUFFIX,
+  UNSUPPORTED_COUNTRY_PATTERN,
+  CDP_VERSION,
+  INTERCEPT_TIMEOUT_MS,
+  SUCCESS_BADGE_MS,
+  UNSUPPORTED_REDIRECT_COOLDOWN_MS,
+  STORAGE_KEYS,
+  STATUS
+} from "./config.js";
+import { patchSource } from "./patch.js";
+import { validateUrl, validateBundleSize, sanitizeErrorMessage } from "./security.js";
+import { metricsTracker } from "./metrics.js";
 
 const sessions = new Map();
 const startingTabs = new Set();
 const lastUnsupportedRedirectAt = new Map();
 
 let enabled = true;
-
-const STATUS = {
-  OFF: {
-    text: "OFF",
-    color: "#5f6368",
-    title: "Flow local test: OFF. Click to enable."
-  },
-  ON: {
-    text: "ON",
-    color: "#1a73e8",
-    title: "Flow local test: ON. New Flow tabs are handled automatically."
-  },
-  RUN: {
-    text: "RUN",
-    color: "#f9ab00",
-    title: "Preparing Flow local test…"
-  },
-  OK: {
-    text: "OK",
-    color: "#188038",
-    title: "Flow local test applied. Automatic mode remains ON."
-  },
-  ERR: {
-    text: "ERR",
-    color: "#d93025",
-    title: "Flow local test stopped. Hover for details."
-  }
-};
+let forcedCallee;
 
 function errorMessage(error) {
-  return error instanceof Error ? error.message : String(error);
+  return sanitizeErrorMessage(error);
 }
 
 async function setStatus(tabId, statusName, detail) {
@@ -133,7 +112,7 @@ function isUnsupportedCountryUrl(url) {
     return (
       parsed.protocol === "https:" &&
       parsed.hostname === FLOW_HOST &&
-      /\/(?:unsupported-country)\/?$/.test(parsed.pathname)
+      UNSUPPORTED_COUNTRY_PATTERN.test(parsed.pathname)
     );
   } catch {
     return false;
@@ -171,6 +150,17 @@ function clearTabState(tabId) {
   sessions.delete(tabId);
   startingTabs.delete(tabId);
   lastUnsupportedRedirectAt.delete(tabId);
+}
+
+// CDP hands us the decoded body, so a base64 payload is ~4/3 of the real
+// byte length. Used purely to enforce MAX_BUNDLE_SIZE_BYTES before decoding.
+function estimateByteLength(response) {
+  const body = response?.body ?? "";
+  if (!response.base64Encoded) {
+    return body.length;
+  }
+  const padding = body.endsWith("==") ? 2 : body.endsWith("=") ? 1 : 0;
+  return Math.max(0, Math.floor((body.length * 3) / 4) - padding);
 }
 
 function decodeResponseBody(response) {
@@ -227,9 +217,9 @@ function buildResponseHeaders(headers, byteLength) {
 
 async function syncForcedCallee() {
   try {
-    const stored = await chrome.storage.local.get("flowPatchForcedCallee");
-    const value = stored.flowPatchForcedCallee;
-    globalThis.__flowPatchForceCallee =
+    const stored = await chrome.storage.local.get(STORAGE_KEYS.FLOW_PATCH_FORCED_CALLEE);
+    const value = stored[STORAGE_KEYS.FLOW_PATCH_FORCED_CALLEE];
+    forcedCallee =
       typeof value === "string" && value.trim() ? value.trim() : undefined;
   } catch {
     // Best-effort.
@@ -271,16 +261,46 @@ async function detach(tabId, finalStatus, detail) {
   }
 }
 
-async function failSession(tabId, detail) {
+/** Persist a failure that is not tied to an active session. */
+async function recordFailure(detail) {
+  const safeDetail = sanitizeErrorMessage(detail);
+
+  metricsTracker.recordAttempt({ success: false, strategy: null, error: safeDetail });
+  void metricsTracker.persist();
+
   try {
     await chrome.storage.local.set({
-      lastError: detail,
-      lastPatchStrategy: null,
-      lastRunAt: new Date().toISOString()
+      [STORAGE_KEYS.LAST_ERROR]: safeDetail,
+      [STORAGE_KEYS.LAST_PATCH_STRATEGY]: null,
+      [STORAGE_KEYS.LAST_RUN_AT]: new Date().toISOString()
     });
   } catch {}
 
-  await detach(tabId, "ERR", detail);
+  return safeDetail;
+}
+
+async function failSession(tabId, detail) {
+  const safeDetail = sanitizeErrorMessage(detail);
+  const session = sessions.get(tabId);
+  const startedAt = session?.startedAt;
+
+  metricsTracker.recordAttempt({
+    success: false,
+    strategy: null,
+    processingTimeMs: startedAt ? Date.now() - startedAt : undefined,
+    error: safeDetail
+  });
+  void metricsTracker.persist();
+
+  try {
+    await chrome.storage.local.set({
+      [STORAGE_KEYS.LAST_ERROR]: safeDetail,
+      [STORAGE_KEYS.LAST_PATCH_STRATEGY]: null,
+      [STORAGE_KEYS.LAST_RUN_AT]: new Date().toISOString()
+    });
+  } catch {}
+
+  await detach(tabId, "ERR", safeDetail);
 }
 
 async function completeSession(tabId, url, strategy = null) {
@@ -291,12 +311,19 @@ async function completeSession(tabId, url, strategy = null) {
     ? "Repeated unsupported-country redirect was stopped."
     : null;
 
+  metricsTracker.recordAttempt({
+    success: true,
+    strategy,
+    processingTimeMs: session?.startedAt ? Date.now() - session.startedAt : undefined
+  });
+  void metricsTracker.persist();
+
   try {
     await chrome.storage.local.set({
-      lastError: statusError,
-      lastPatchedUrl: url,
-      lastPatchStrategy: strategy,
-      lastRunAt: new Date().toISOString()
+      [STORAGE_KEYS.LAST_ERROR]: statusError,
+      [STORAGE_KEYS.LAST_PATCHED_URL]: url,
+      [STORAGE_KEYS.LAST_PATCH_STRATEGY]: strategy,
+      [STORAGE_KEYS.LAST_RUN_AT]: new Date().toISOString()
     });
   } catch {}
 
@@ -361,12 +388,22 @@ async function handlePausedResponse(source, params) {
       );
     }
 
+    const urlCheck = validateUrl(params.request.url);
+    if (!urlCheck.valid) {
+      throw new Error(`Bundle URL rejected: ${urlCheck.reason}.`);
+    }
+
     const response = await send(tabId, "Fetch.getResponseBody", {
       requestId: params.requestId
     });
 
+    const sizeCheck = validateBundleSize(estimateByteLength(response));
+    if (!sizeCheck.valid) {
+      throw new Error(`Bundle rejected: ${sizeCheck.reason}.`);
+    }
+
     const sourceText = decodeResponseBody(response);
-    const patchResult = FlowPatch.patchSource(sourceText);
+    const patchResult = patchSource(sourceText, { forcedCallee });
 
     if (!patchResult.ok) {
       throw new Error(patchResult.error);
@@ -474,7 +511,8 @@ async function startSession(tabId, navigationUrl) {
       handling: false,
       timeoutId,
       returnHome: false,
-      redirectSuppressed: false
+      redirectSuppressed: false,
+      startedAt: Date.now()
     });
 
     try {
@@ -508,13 +546,7 @@ async function startSession(tabId, navigationUrl) {
       try {
         await detachDebugger(tabId);
       } catch {}
-      try {
-        await chrome.storage.local.set({
-          lastError: detail,
-          lastPatchStrategy: null,
-          lastRunAt: new Date().toISOString()
-        });
-      } catch {}
+      await recordFailure(detail);
       await safeSetStatus(tabId, "ERR", detail);
     }
   } finally {
@@ -584,57 +616,49 @@ async function toggleAutomaticMode(clickedTab) {
 
 async function initializeEnabledState() {
   try {
-    const stored = await chrome.storage.local.get("enabled");
-    enabled = stored.enabled !== false;
-    if (typeof stored.enabled !== "boolean") {
-      await chrome.storage.local.set({ enabled: true });
+    const stored = await chrome.storage.local.get(STORAGE_KEYS.ENABLED);
+    enabled = stored[STORAGE_KEYS.ENABLED] !== false;
+    if (typeof stored[STORAGE_KEYS.ENABLED] !== "boolean") {
+      await chrome.storage.local.set({ [STORAGE_KEYS.ENABLED]: true });
     }
   } catch {
     enabled = true;
   }
 
   await syncForcedCallee();
-  await safeSetStatus(undefined, enabled ? "ON" : "OFF");
+
+  // Do not clobber a per-tab RUN/OK/ERR badge while a session is in flight.
+  if (sessions.size === 0) {
+    await safeSetStatus(undefined, enabled ? "ON" : "OFF");
+  }
 }
 
-const enabledReady = initializeEnabledState().catch(() => {});
+// The service worker is re-evaluated on every wake-up, and onInstalled /
+// onStartup both fire on the already-initialised module. Keep it idempotent.
+let enabledReady = null;
+function ensureInitialized() {
+  if (!enabledReady) {
+    enabledReady = initializeEnabledState().catch(() => {});
+  }
+  return enabledReady;
+}
+
+ensureInitialized();
 
 chrome.action.onClicked.addListener((tab) => {
-  void enabledReady
+  void ensureInitialized()
     .then(() => toggleAutomaticMode(tab))
     .catch(async (error) => {
-      const detail = errorMessage(error);
-      try {
-        await chrome.storage.local.set({
-          lastError: detail,
-          lastPatchStrategy: null,
-          lastRunAt: new Date().toISOString()
-        });
-      } catch {}
+      const detail = await recordFailure(errorMessage(error));
       await safeSetStatus(tab?.id, "ERR", detail);
     });
 });
 
 chrome.commands.onCommand.addListener((command) => {
-  if (command === "_execute_action") {
-    // Toggle command triggered by Alt+Shift+F
-    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-      const clickedTab = tabs[0];
-      void enabledReady
-        .then(() => toggleAutomaticMode(clickedTab))
-        .catch(async (error) => {
-          const detail = errorMessage(error);
-          try {
-            await chrome.storage.local.set({
-              lastError: detail,
-              lastPatchStrategy: null,
-              lastRunAt: new Date().toISOString()
-            });
-          } catch {}
-          await safeSetStatus(clickedTab?.id, "ERR", detail);
-        });
-    });
-  } else if (command === "open_status") {
+  // NOTE: `_execute_action` is a reserved command — Chrome never dispatches it
+  // to `commands.onCommand`; it triggers `chrome.action.onClicked` instead.
+  // Handling it here would be unreachable code.
+  if (command === "open_status") {
     void chrome.tabs.create({ url: chrome.runtime.getURL("status.html") });
   }
 });
@@ -668,7 +692,7 @@ chrome.webNavigation.onBeforeNavigate.addListener(
       return;
     }
 
-    void enabledReady
+    void ensureInitialized()
       .then(async () => {
         if (!enabled) {
           return;
@@ -703,23 +727,23 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
   if (areaName !== "local") {
     return;
   }
-  if (changes.enabled) {
-    enabled = changes.enabled.newValue !== false;
+  if (changes[STORAGE_KEYS.ENABLED]) {
+    enabled = changes[STORAGE_KEYS.ENABLED].newValue !== false;
     if (!enabled) {
       void stopAllSessions().then(() => safeSetStatus(undefined, "OFF"));
     } else {
       void safeSetStatus(undefined, "ON");
     }
   }
-  if (changes.flowPatchForcedCallee) {
+  if (changes[STORAGE_KEYS.FLOW_PATCH_FORCED_CALLEE]) {
     void syncForcedCallee();
   }
 });
 
 chrome.runtime.onInstalled.addListener(() => {
-  void initializeEnabledState();
+  void ensureInitialized();
 });
 
 chrome.runtime.onStartup.addListener(() => {
-  void initializeEnabledState();
+  void ensureInitialized();
 });

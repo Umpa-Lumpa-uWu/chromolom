@@ -8,7 +8,7 @@
 <body>
   <main>
     <h1>Flow Local Test Runner</h1>
-    <p class="subtitle">Version 3.1.0</p>
+    <p class="subtitle" id="version">Version …</p>
 
     <section>
       <h2>Mode</h2>
@@ -49,6 +49,14 @@
     </section>
 
     <section>
+      <h2>Metrics</h2>
+      <p class="hint">
+        Success rate and timing for this browser profile. Updated after every attempt.
+      </p>
+      <pre id="metrics-output">No metrics recorded yet.</pre>
+    </section>
+
+    <section>
       <h2>Diagnostics</h2>
       <p class="hint">
         Saved automatically when a patch fails. Cleared on success.
@@ -61,6 +69,6 @@
       <pre id="diagnostics-output">No diagnostics saved.</pre>
     </section>
   </main>
-  <script src="status.js"></script>
+  <script src="status.js" type="module"></script>
 </body>
 </html>

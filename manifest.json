@@ -15,7 +15,6 @@
     "tabs",
     "webNavigation"
   ],
-  "optional_permissions": [],
   "host_permissions": [
     "https://flow.google.com/*"
   ],
@@ -48,7 +47,7 @@
       "description": "Open Flow status page"
     }
   },
-  "homepage_url": "https://github.com/your-org/flow-local-test-runner",
+  "homepage_url": "https://github.com/Umpa-Lumpa-uWu/chromolom",
   "content_security_policy": {
     "extension_pages": "script-src 'self'; object-src 'self'"
   }
