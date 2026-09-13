@@ -35,7 +35,7 @@
     "open_in_tab": true
   },
   "commands": {
-    "_execute_action": {
+    "toggle-extension": {
       "suggested_key": {
         "default": "Alt+Shift+F"
       },
