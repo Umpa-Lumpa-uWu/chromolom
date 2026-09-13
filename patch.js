@@ -413,3 +413,5 @@
 
   globalScope.FlowPatch = Object.freeze({ patchSource });
 })(globalThis);
+// ES Module export for background.js
+export const FlowPatch = globalThis.FlowPatch;

@@ -15,9 +15,7 @@
     "tabs",
     "webNavigation"
   ],
-  "optional_permissions": [
-    "declarativeNetRequest"
-  ],
+  "optional_permissions": [],
   "host_permissions": [
     "https://flow.google.com/*"
   ],

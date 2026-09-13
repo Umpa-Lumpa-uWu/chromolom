@@ -8,7 +8,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert';
 
-// Mock global scope for FlowPatch
+// Create mock global scope for FlowPatch
 const mockGlobalScope = {
   chrome: {
     storage: {
@@ -22,37 +22,40 @@ const mockGlobalScope = {
     error: () => {},
     warn: () => {},
     log: () => {}
-  }
+  },
+  __lastFlowSource: null,
+  __lastFlowPatchDiagnostics: null
 };
 
-// Load patch module
+// Load patch module with our mock global scope
 await import('../patch.js');
 
 test('FlowPatch module structure', () => {
-  assert.ok(mockGlobalScope.FlowPatch, 'FlowPatch should be defined');
-  assert.strictEqual(typeof mockGlobalScope.FlowPatch.patchSource, 'function', 'patchSource should be a function');
+  // FlowPatch is attached to globalThis, not mockGlobalScope
+  assert.ok(globalThis.FlowPatch, 'FlowPatch should be defined on globalThis');
+  assert.strictEqual(typeof globalThis.FlowPatch.patchSource, 'function', 'patchSource should be a function');
 });
 
 test('patchSource handles empty input', () => {
-  const result1 = mockGlobalScope.FlowPatch.patchSource('');
+  const result1 = globalThis.FlowPatch.patchSource('');
   assert.strictEqual(result1.ok, false, 'Empty string should fail');
   assert.strictEqual(result1.error, 'Bundle source is empty or invalid.');
 
-  const result2 = mockGlobalScope.FlowPatch.patchSource(null);
+  const result2 = globalThis.FlowPatch.patchSource(null);
   assert.strictEqual(result2.ok, false, 'Null should fail');
 
-  const result3 = mockGlobalScope.FlowPatch.patchSource(undefined);
+  const result3 = globalThis.FlowPatch.patchSource(undefined);
   assert.strictEqual(result3.ok, false, 'Undefined should fail');
 });
 
 test('patchSource handles non-string input', () => {
-  const result1 = mockGlobalScope.FlowPatch.patchSource(123);
+  const result1 = globalThis.FlowPatch.patchSource(123);
   assert.strictEqual(result1.ok, false, 'Number should fail');
 
-  const result2 = mockGlobalScope.FlowPatch.patchSource({});
+  const result2 = globalThis.FlowPatch.patchSource({});
   assert.strictEqual(result2.ok, false, 'Object should fail');
 
-  const result3 = mockGlobalScope.FlowPatch.patchSource([]);
+  const result3 = globalThis.FlowPatch.patchSource([]);
   assert.strictEqual(result3.ok, false, 'Array should fail');
 });
 

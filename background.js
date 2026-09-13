@@ -1,4 +1,5 @@
-importScripts("patch.js");
+// ES Module imports
+import { FlowPatch } from "./patch.js";
 
 const FLOW_HOME = "https://flow.google.com/";
 const FLOW_HOST = "flow.google.com";
