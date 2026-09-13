@@ -1,0 +1,25 @@
+{
+  "name": "flow-local-test-runner",
+  "version": "4.0.0",
+  "description": "Persistent adaptive local toggle for Google Flow frontend response override",
+  "type": "module",
+  "scripts": {
+    "test": "node --experimental-vm-modules tests/*.test.js",
+    "test:patch": "node --experimental-vm-modules tests/patch.test.js",
+    "test:security": "node --experimental-vm-modules tests/security.test.js",
+    "lint": "echo \"Linting not configured yet\"",
+    "validate": "node -c manifest.json && echo \"Manifest valid\""
+  },
+  "keywords": [
+    "chrome-extension",
+    "flow",
+    "testing",
+    "debugging"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {},
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
